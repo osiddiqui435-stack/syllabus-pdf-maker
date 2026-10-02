@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smart Syllabus PDF & Formatter</title>
   <!-- PDF Generator -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -9,28 +10,56 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f9; }
-    .container { display: flex; gap: 20px; }
-    .editor-section, .preview-section { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    body { font-family: Arial, sans-serif; margin: 15px; background: #f4f4f9; }
     
-    .meta-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-    .meta-inputs input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+    /* Main Layout - Side-by-side on desktop, stacked on mobile */
+    .container { 
+      display: flex; 
+      flex-direction: row; 
+      gap: 20px; 
+    }
     
-    textarea { width: 100%; height: 350px; font-size: 14px; padding: 10px; box-sizing: border-box; font-family: monospace; }
+    .editor-section, .preview-section { 
+      flex: 1; 
+      background: white; 
+      padding: 20px; 
+      border-radius: 8px; 
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+      min-width: 0; /* Prevents overflow */
+    }
+    
+    .meta-inputs { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 10px; 
+      margin-bottom: 15px; 
+    }
+    .meta-inputs input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box; }
+    
+    textarea { width: 100%; height: 320px; font-size: 14px; padding: 10px; box-sizing: border-box; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; }
     
     .toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-    .toolbar button, .toolbar label { padding: 6px 12px; cursor: pointer; border: 1px solid #ccc; background: #f8f9fa; border-radius: 4px; font-size: 13px; display: inline-block; }
-    .toolbar button.btn-primary { background: #28a745; color: white; border: none; }
+    .toolbar button, .toolbar label { 
+      padding: 8px 12px; 
+      cursor: pointer; 
+      border: 1px solid #ccc; 
+      background: #f8f9fa; 
+      border-radius: 4px; 
+      font-size: 13px; 
+      display: inline-block; 
+      text-align: center;
+    }
+    .toolbar button.btn-primary { background: #28a745; color: white; border: none; font-weight: bold; }
     .toolbar button.btn-hindi { background: #17a2b8; color: white; border: none; }
     .toolbar button.btn-whatsapp { background: #25D366; color: white; border: none; }
     .file-input { display: none; }
 
     /* PDF Template Layout */
-    #pdf-template { padding: 25px; font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; }
+    #pdf-template { padding: 20px; font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; background: #fff; }
     .header-box { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-    .header-box h2 { margin: 0; font-size: 22px; text-transform: uppercase; }
-    .header-box h4 { margin: 5px 0 0 0; font-size: 15px; font-weight: normal; color: #444; }
-    .meta-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; margin-top: 8px; }
+    .header-box h2 { margin: 0; font-size: 20px; text-transform: uppercase; }
+    .header-box h4 { margin: 5px 0 0 0; font-size: 14px; font-weight: normal; color: #444; }
+    .meta-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 12px; margin-top: 8px; }
 
     /* Subject Heading */
     .subject-title { font-weight: bold; font-size: 16px; margin-top: 16px; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
@@ -46,6 +75,39 @@
     #pdf-template ul.level-3 > li { font-size: 12px; font-weight: normal; margin-bottom: 3px; line-height: 1.3; color: #444; }
     
     #loading { display: none; color: #007bff; font-weight: bold; margin-bottom: 8px; }
+
+    /* MOBILE RESPONSIVE RULES */
+    @media screen and (max-width: 768px) {
+      body { margin: 10px; }
+      
+      /* Stack layout vertically on mobile screens */
+      .container { 
+        flex-direction: column; 
+      }
+
+      /* Stack metadata inputs in single column */
+      .meta-inputs { 
+        grid-template-columns: 1fr; 
+      }
+
+      /* Make toolbar buttons stretch neatly on touchscreens */
+      .toolbar button, .toolbar label { 
+        flex: 1 1 calc(50% - 6px); 
+        box-sizing: border-box;
+      }
+      
+      .toolbar button.btn-primary, .toolbar button.btn-whatsapp {
+        flex: 1 1 100%;
+      }
+
+      textarea { 
+        height: 250px; 
+      }
+      
+      .editor-section, .preview-section {
+        padding: 15px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -53,7 +115,7 @@
   <h2>Syllabus PDF Generator & Formatter</h2>
   
   <div class="container">
-    <!-- Editor Section -->
+    <!-- Editor Section (Appears First / On Top) -->
     <div class="editor-section">
       <div class="meta-inputs">
         <input type="text" id="schoolName" placeholder="School Name (e.g., St. Mary's School)" oninput="updatePreview()">
@@ -77,12 +139,12 @@
       <div id="loading">Extracting text from image... Please wait.</div>
 
       <textarea id="inputText" placeholder="Type or paste syllabus here...
-To convert Hinglish to Hindi:
-Highlight/select text like 'Apatit Gadyansh' and click 'Convert Selected to Hindi'." oninput="updatePreview()"></textarea>
+Select text and click 'Convert Selected to Hindi' for Hinglish conversion." oninput="updatePreview()"></textarea>
     </div>
 
-    <!-- Live Preview Section -->
+    <!-- Live Preview Section (Appears Beside on Desktop, Below on Mobile) -->
     <div class="preview-section">
+      <h3 style="margin-top:0;">PDF Preview</h3>
       <div id="pdf-template">
         <div class="header-box" id="headerBox" style="display:none;">
           <h2 id="dispSchool"></h2>
@@ -125,7 +187,7 @@ Highlight/select text like 'Apatit Gadyansh' and click 'Convert Selected to Hind
       updatePreview();
     }
 
-    // Convert Selected Text to Hindi using Google Input Tools API
+    // Convert Selected Text to Hindi via Google Input Tools API
     async function convertSelectedToHindi() {
       const textarea = document.getElementById('inputText');
       const start = textarea.selectionStart;
