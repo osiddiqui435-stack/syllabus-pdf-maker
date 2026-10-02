@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Syllabus PDF & Formatter</title>
+  <!-- PDF Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- OCR Library for Image Uploads -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f9; }
+    .container { display: flex; gap: 20px; }
+    .editor-section, .preview-section { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    
+    .meta-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+    .meta-inputs input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+    
+    textarea { width: 100%; height: 350px; font-size: 14px; padding: 10px; box-sizing: border-box; font-family: monospace; }
+    
+    .toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .toolbar button, .toolbar label { padding: 6px 12px; cursor: pointer; border: 1px solid #ccc; background: #f8f9fa; border-radius: 4px; font-size: 13px; display: inline-block; }
+    .toolbar button.btn-primary { background: #28a745; color: white; border: none; }
+    .toolbar button.btn-hindi { background: #17a2b8; color: white; border: none; }
+    .toolbar button.btn-whatsapp { background: #25D366; color: white; border: none; }
+    .file-input { display: none; }
+
+    /* PDF Template Layout */
+    #pdf-template { padding: 25px; font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; }
+    .header-box { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+    .header-box h2 { margin: 0; font-size: 22px; text-transform: uppercase; }
+    .header-box h4 { margin: 5px 0 0 0; font-size: 15px; font-weight: normal; color: #444; }
+    .meta-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; margin-top: 8px; }
+
+    /* Subject Heading */
+    .subject-title { font-weight: bold; font-size: 16px; margin-top: 16px; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+    
+    /* Multilevel Bullets with Visual Size Hierarchy */
+    #pdf-template ul.level-1 { margin-top: 4px; padding-left: 20px; list-style-type: disc; }
+    #pdf-template ul.level-1 > li { font-size: 14px; font-weight: bold; margin-bottom: 6px; line-height: 1.4; color: #111; }
+
+    #pdf-template ul.level-2 { margin-top: 2px; padding-left: 20px; list-style-type: circle; }
+    #pdf-template ul.level-2 > li { font-size: 13px; font-weight: normal; margin-bottom: 4px; line-height: 1.4; color: #222; }
+
+    #pdf-template ul.level-3 { margin-top: 2px; padding-left: 20px; list-style-type: square; }
+    #pdf-template ul.level-3 > li { font-size: 12px; font-weight: normal; margin-bottom: 3px; line-height: 1.3; color: #444; }
+    
+    #loading { display: none; color: #007bff; font-weight: bold; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+  <h2>Syllabus PDF Generator & Formatter</h2>
+  
+  <div class="container">
+    <!-- Editor Section -->
+    <div class="editor-section">
+      <div class="meta-inputs">
+        <input type="text" id="schoolName" placeholder="School Name (e.g., St. Mary's School)" oninput="updatePreview()">
+        <input type="text" id="examTitle" placeholder="Exam Title (e.g., Half-Yearly Syllabus)" oninput="updatePreview()">
+        <input type="text" id="className" placeholder="Class (e.g., Class 11th)" oninput="updatePreview()">
+        <input type="text" id="examDate" placeholder="Date/Session (e.g., 2026-27)" oninput="updatePreview()">
+      </div>
+
+      <div class="toolbar">
+        <button onclick="insertText('\n• ')">Main Bullet (•)</button>
+        <button onclick="insertSubBullet()">Sub Bullet (Tab)</button>
+        <button onclick="insertSuperSubBullet()">Super Sub Bullet (2x Tab)</button>
+        <button onclick="insertText('\n• Subject Name:')">New Subject</button>
+        <button class="btn-hindi" onclick="convertSelectedToHindi()">Convert Selected to Hindi</button>
+        <label for="imageUpload"> Upload Image (OCR)</label>
+        <input type="file" id="imageUpload" class="file-input" accept="image/*" onchange="processImage(event)">
+        <button class="btn-whatsapp" onclick="copyForWhatsApp()">Copy for WhatsApp</button>
+        <button class="btn-primary" onclick="generatePDF()">Export PDF</button>
+      </div>
+
+      <div id="loading">Extracting text from image... Please wait.</div>
+
+      <textarea id="inputText" placeholder="Type or paste syllabus here...
+To convert Hinglish to Hindi:
+Highlight/select text like 'Apatit Gadyansh' and click 'Convert Selected to Hindi'." oninput="updatePreview()"></textarea>
+    </div>
+
+    <!-- Live Preview Section -->
+    <div class="preview-section">
+      <div id="pdf-template">
+        <div class="header-box" id="headerBox" style="display:none;">
+          <h2 id="dispSchool"></h2>
+          <h4 id="dispExam"></h4>
+          <div class="meta-row">
+            <span id="dispClass"></span>
+            <span id="dispDate"></span>
+          </div>
+        </div>
+        <div id="parsedContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function insertText(text) {
+      const textarea = document.getElementById('inputText');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
+      textarea.focus();
+      updatePreview();
+    }
+
+    function insertSubBullet() {
+      const textarea = document.getElementById('inputText');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + "\n\t- " + textarea.value.substring(end);
+      textarea.focus();
+      updatePreview();
+    }
+
+    function insertSuperSubBullet() {
+      const textarea = document.getElementById('inputText');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + "\n\t\t* " + textarea.value.substring(end);
+      textarea.focus();
+      updatePreview();
+    }
+
+    // Convert Selected Text to Hindi using Google Input Tools API
+    async function convertSelectedToHindi() {
+      const textarea = document.getElementById('inputText');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selectedText = textarea.value.substring(start, end).trim();
+
+      if (!selectedText) {
+        alert("Please highlight/select the Hinglish text you want to convert first.");
+        return;
+      }
+
+      try {
+        const url = `https://inputtools.google.com/request?text=${encodeURIComponent(selectedText)}&itc=hi-t-i0-und&num=1`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data[0] === "SUCCESS" && data[1][0][1][0]) {
+          const hindiConverted = data[1][0][1][0];
+          textarea.value = textarea.value.substring(0, start) + hindiConverted + textarea.value.substring(end);
+          textarea.focus();
+          textarea.setSelectionRange(start, start + hindiConverted.length);
+          updatePreview();
+        } else {
+          alert("Could not convert the selected text.");
+        }
+      } catch (err) {
+        alert("Error connecting to conversion service: " + err.message);
+      }
+    }
+
+    // OCR Image Processing
+    function processImage(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      document.getElementById('loading').style.display = 'block';
+      Tesseract.recognize(file, 'eng+hin', { logger: m => console.log(m) })
+        .then(({ data: { text } }) => {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('inputText').value += "\n" + text;
+          updatePreview();
+        })
+        .catch(err => {
+          document.getElementById('loading').style.display = 'none';
+          alert("Error processing image: " + err.message);
+        });
+    }
+
+    // Render HTML Preview
+    function updatePreview() {
+      const school = document.getElementById('schoolName').value;
+      const exam = document.getElementById('examTitle').value;
+      const cls = document.getElementById('className').value;
+      const date = document.getElementById('examDate').value;
+
+      const headerBox = document.getElementById('headerBox');
+      if (school || exam || cls || date) {
+        headerBox.style.display = 'block';
+        document.getElementById('dispSchool').innerText = school;
+        document.getElementById('dispExam').innerText = exam;
+        document.getElementById('dispClass').innerText = cls ? "Class: " + cls : "";
+        document.getElementById('dispDate').innerText = date ? "Date/Session: " + date : "";
+      } else {
+        headerBox.style.display = 'none';
+      }
+
+      const text = document.getElementById('inputText').value;
+      const lines = text.split('\n');
+      let htmlOutput = '';
+      let currentLevel = 0;
+
+      lines.forEach(line => {
+        if (!line.trim()) return;
+
+        let indentMatch = line.match(/^(\t+|\s{2,})/);
+        let level = 1;
+        if (indentMatch) {
+          let indentStr = indentMatch[0];
+          level = indentStr.includes('\t') ? indentStr.length + 1 : Math.floor(indentStr.length / 2) + 1;
+        }
+
+        let cleanText = line.trim();
+        const isBullet = /^[•\-\*\d+\w\.]\s*/.test(cleanText);
+        cleanText = cleanText.replace(/^[•\-\*]\s*/, '').replace(/^\w+[\.\)]\s*/, '');
+
+        if (!isBullet && level === 1) {
+          while (currentLevel > 0) { htmlOutput += '</ul>'; currentLevel--; }
+          htmlOutput += `<div class="subject-title">${cleanText}</div>`;
+        } else {
+          if (level > currentLevel) {
+            while (level > currentLevel) {
+              currentLevel++;
+              htmlOutput += `<ul class="level-${Math.min(currentLevel, 3)}">`;
+            }
+          } else if (level < currentLevel) {
+            while (level < currentLevel) {
+              htmlOutput += '</ul>';
+              currentLevel--;
+            }
+          }
+          htmlOutput += `<li>${cleanText}</li>`;
+        }
+      });
+
+      while (currentLevel > 0) { htmlOutput += '</ul>'; currentLevel--; }
+      document.getElementById('parsedContent').innerHTML = htmlOutput;
+    }
+
+    function copyForWhatsApp() {
+      const text = document.getElementById('inputText').value;
+      navigator.clipboard.writeText(text);
+      alert("Syllabus text copied to clipboard!");
+    }
+
+    function generatePDF() {
+      const element = document.getElementById('pdf-template');
+      const opt = {
+        margin:       0.4,
+        filename:     'Syllabus.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save();
+    }
+  </script>
+
+</body>
+</html>
